@@ -1,1 +1,1 @@
-export GOPATH=$HOME/dev/newhgload
+export GOPATH=$HOME/newhgload

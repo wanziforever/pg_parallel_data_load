@@ -1,0 +1,17 @@
+dbname: postgres
+user: postgres
+password: 1
+tablename: bmsql_item
+#datapath: /home/postgres/data/csv/bmsql_item_large.csv
+datapath: /home/postgres/data/csv/item.csv
+partitionField: 1
+readers: 4
+
+nodes:
+  - host: 127.0.0.1
+    port: 5432
+#  - host: 127.0.0.1
+#    port: 5433  
+#  - host: 127.0.0.1
+#    port: 5434
+

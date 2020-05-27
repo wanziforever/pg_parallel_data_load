@@ -1,16 +1,21 @@
 dbname: postgres
-user: denny
+user: postgres
 password: 1
 tablename: bmsql_item
-datapath: /home/denny/test/postgres/data/csv/bmsql_item_large.csv
-#datapath: /home/denny/test/postgres/data/csv/item.csv
+datapath: /home/postgres/data/csv/bmsql_item_extreme_large.csv
+#datapath: /home/postgres/data/csv/bmsql_item_large.csv
+#datapath: /home/postgres/data/csv/item.csv
+#datapath: /home/postgres/data/csv/item_oneline.csv
 partitionField: 1
+buffersize: 8 #M
+readers: 2
+maxtuplechunk: 0
 
 nodes:
   - host: 127.0.0.1
     port: 5432
   - host: 127.0.0.1
-    port: 5433  
+    port: 5433
   - host: 127.0.0.1
     port: 5434
 
