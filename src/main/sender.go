@@ -1,11 +1,9 @@
 package main
 
 import (
-	"log"
 	"strings"
 	"fmt"
 	"sync"
-	//	"encoding/binary"
 	"github.com/jackc/pgconn"
 	"context"
 	"io"
@@ -13,9 +11,13 @@ import (
 	"bytes"
 )
 
-// two parameter copied from lib/pq/copy.go, because i need to use the flush func directly
-const ciBufferSize = 64 * 1024
-const ciBufferFlushSize = 63 * 1024
+
+type TableInfo struct {
+	name string
+	columns []string
+	datapath string
+	partitionField int
+}
 
 type DBInfo struct {
 	host string
@@ -33,7 +35,7 @@ func (this DBInfo) MakeConnectionString() (string) {
 }
 
 type Sender struct {
-	dbi DBInfo
+	dbi *DBInfo
 	index int
 	c chan []byte
 	shutdown chan int
@@ -56,17 +58,16 @@ func (this *Sender) SetTable(name string, columns ... string) {
 }
 
 func (this *Sender) Run() {
-	log.Printf("%s run enter\n", this.name)
+	logger.Debug("%s run enter", this.name)
 	
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Second)
 
-	_, err := this.db.CopyFrom(ctx, this.r, CopyIn(
-		"bmsql_item", "i_id", "i_name", "i_price", "i_data", "i_im_id"))
+	_, err := this.db.CopyFrom(ctx, this.r, CopyIn(this.tablename, this.fields...))
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 
-	log.Printf("%s data has been copied\n", this.name)
+	logger.Info("%s data has been copied", this.name)
 loop:
 	for {
 		select {
@@ -77,11 +78,11 @@ loop:
 		}
 	}
 	this.FinishWork()
-	log.Printf("sender work done for [%d]\n", this.index)
+	logger.Info("sender work done for [%d]", this.index)
 }
 
 func (this *Sender) FinishWork() {
-	log.Println("meet shutdown")
+	logger.Debug("meet shutdown")
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	this.db.Close(ctx)
 	if this.wg != nil {
@@ -92,54 +93,41 @@ func (this *Sender) FinishWork() {
 
 func (this *Sender) PrepareCopyTransaction() {
 	connstr := this.dbi.MakeConnectionString()
-	log.Println("going to connect ", connstr)
+	logger.Info("going to connect %s", connstr)
 	db, err := pgconn.Connect(context.Background(), connstr)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 	this.db = db
 }
 
 
 func (this *Sender) Send(s []byte) {
-	//datastring := string(s)
-	//v := strings.Split(datastring, ",")
-	//y := make([]interface{}, len(v))
-	//for i, n := range v {
-	//	y[i] = n
-	//}
-	//
-	//// here we should use extend the array, if not, no data will be provisioned
-	//this.stmt.Exec(y...)
 	_, err := this.w.Write(s)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 	this.count++
 }
 
 
-
 func (this *Sender) StartBackend(wg *sync.WaitGroup) {
-	log.Println("sender backend start")
+	logger.Debug("sender backend start")
 	this.c = make(chan []byte)
 	this.shutdown = make(chan int)
 	this.wg = wg
 	this.wg.Add(1)
-	this.PrepareCopyTransaction()
-	this.buffer = append(this.buffer, 'd', 0, 0, 0, 0) // for binary
+	this.buffer = append(this.buffer, 'd', 0, 0, 0, 0) // for binary copy only
 	this.r, this.w = io.Pipe()
 	go this.Run()
 }
 
 
-func NewSender(host string, port int, user string,
-	password string, db string, index int) (*Sender) {
-	var dbi = DBInfo{host, port, db, user, password}
+func NewSender(dbi *DBInfo, index int) (*Sender) {
 	return &Sender{
 		dbi: dbi,
 		index: index,
-		buffer:  make([]byte, 0, ciBufferSize),
+		//buffer:  make([]byte, 0, ciBufferSize),
 		name: fmt.Sprintf("Sender-%d", index),
 	}
 }
@@ -153,13 +141,14 @@ func QuoteIdentifier(name string) string {
 	return `"` + strings.Replace(name, `"`, `""`, -1) + `"`
 }
 
-func CopyIn(table string, columns ...string) string {
-	statement := "COPY " + QuoteIdentifier(table) + " ("
+
+func CopyIn(table string, columns...string) string {
+	statement := "COPY " + table + " ("
 	for i, col := range columns {
 		if i != 0 {
 			statement += ", "
 		}
-		statement += QuoteIdentifier(col)
+		statement += col
 	}
 	statement += ") FROM STDIN WITH (format csv)"
 	return statement

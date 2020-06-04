@@ -64,7 +64,10 @@ func (this *DataQueue) popQ() (*TupleBasket) {
 
 
 func (this *DataQueue) size() int {
-	return len(this.q)
+	this.mux.Lock()
+	s := len(this.q)
+	this.mux.Unlock()
+	return s
 }
 
 

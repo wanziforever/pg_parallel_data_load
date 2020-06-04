@@ -2,149 +2,85 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"os"
 	"time"
 	"loadconfig"
-	"io"
+	"strings"
 )
+
+var logger = NewLogger()
 
 var (
 	g_bufsize = 1 * 1024 * 1024 // M default
 	g_configfile string
-	sd chan int = make(chan int)
-	MAX_MODE = 100
+	g_sys_configfile string = "sys.yml"
 	g_readernum = 1 // default
 	g_nodenum = 0
-	g_datafile = ""
-	g_tablename = ""
-	g_filesize = int64(0)
-	g_chunks = make([]*Chunk, 0)
+	g_tablenum = 0
 	g_maxtuplechunk int64 = 0
-	g_shardingBuffer [][][]byte
-	nodedq []*DataQueue
 	g_dbinfos []DBInfo
+	g_tableinfos []TableInfo
+	g_quiet = false
+	g_filesize int64 = 0
+	g_jobs []*Job
+	jwg sync.WaitGroup
 )
 
-
-var rwg sync.WaitGroup
-var swg sync.WaitGroup
-var gwg sync.WaitGroup
-
-var senderlist []*Sender
-var readerlist []*Reader
-
-type NodeChan struct {
-	data *chan []byte
-	control *chan int
-}
-
-
-func GoThroughDataQueue() {
-	for i:=0; i<g_nodenum; i++ {
-		gwg.Add(1)
-		go func(i int) {
-			log.Println("Go through data queue")
-			q := nodedq[i]
-			s := senderlist[i]
-			for {
-				b := q.popQ()
-				if b == nil {
-					//log.Printf("through[%d] no basket found sleep for a well\n", i)
-					time.Sleep(time.Duration(10)*time.Millisecond)
-					continue
-				}
-
-				//log.Printf("gothrough[%d] swtich basket\n", i)
-				buf := make([]byte, 2048)
-				for {
-					n, err := b.Read(buf)
-					if err == io.EOF {
-						break
-					}
-
-					//log.Printf("gothrough queue [%d], %s\n", i, string(t.data()))
-					s.w.Write(buf[:n])
-				}
-				if b.last == true {
-					break
-				}
-			}
-			s.w.Close()
-			//log.Printf("gothrough[%d] finish\n", i)
-			gwg.Done()
-		}(i)
-	}
-}
-
-
-type Chunk struct {
-	chunksize int64
-	bufsize int
-	offset int64
-}
-
-func StartSenders(conf *loadconfig.Config) {
-	log.Println("StartSenders start...")
-	for i, n := range conf.Nodes {
-		sender := NewSender(n.Host, n.Port, conf.User,
-			conf.Password, conf.Dbname, i)
-		// currently hard code the table structure
-		//sender.SetTable(
-		//	"bmsql_item",
-		//	"i_id",
-		//	"i_name",
-		//	"i_price",
-		//	"i_data",
-		//	"i_im_id")
-		sender.StartBackend(&swg)
-		//nc.SetNodeChan(i, NodeChan{c, s})
-		senderlist = append(senderlist, sender)
-	}
-}
-
-func WaitSendersStop() {
-	for i:=0;i<len(senderlist);i++ {
-		senderlist[i].shutdown <- 0
-	}
-	swg.Wait()
-}
-
 func loadConfig(configFile string) (*loadconfig.Config) {
-	if g_configfile == "" {
-		log.Println("configuration file not provided ..")
+	if configFile == "" {
+		logger.Error("configuration file not provided ..")
 		os.Exit(1)
 	}
 	
-	conf, err := loadconfig.ReadConfigData(g_configfile)
+	conf, err := loadconfig.ReadConfigData(configFile)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err.Error())
+	}
+	return conf
+}
+
+func loadSysConfig(configFile string) (*loadconfig.SysConfig) {
+	if configFile == "" {
+		logger.Error("system configuration file not provided ..")
+		os.Exit(1)
+	}
+	
+	conf, err := loadconfig.ReadSysConfigData(configFile)
+	if err != nil {
+		logger.Warn("no system configuration provided")
+		return nil
 	}
 	return conf
 }
 
 
-func sysinit(conf *loadconfig.Config) {
-	g_bufsize = conf.Buffersize * 1024 * 1024
+func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
+	logger.set_log_level(conf.Loglevel)
+
 	g_readernum = conf.Readers
 	g_nodenum = len(conf.Nodes)
-	g_shardingBuffer = make([][][]byte, g_nodenum)
-	g_datafile = fmt.Sprintf("%s", conf.Datapath)
-	g_tablename = conf.TableName
-	f, err := os.Stat(g_datafile)
-	if err != nil {
-		fmt.Println("fail to open", g_datafile)
-		os.Exit(1)
-	}
-
-	g_filesize = f.Size()
+	g_tablenum = len(conf.Tables)
 	g_maxtuplechunk = conf.Maxtuplechunk
 
-	nodedq = make([]*DataQueue, g_nodenum)
-	for i:=0; i<g_nodenum; i++ {
-		nodedq[i] = NewDataQueue()
+	if sysconf != nil {
+		g_BasketTupleSize = sysconf.Basket_tuple_size * 1024 * 1024
+		g_DataQueueSize = sysconf.Max_data_queue_sync_size
+		g_bufsize = sysconf.Io_read_size * 1024 * 1024
 	}
+
+	g_tableinfos = make([]TableInfo, 0)
+	for i:=0; i<g_tablenum; i++ {
+		t := conf.Tables[i]
+		g_tableinfos = append(g_tableinfos,
+			TableInfo{
+				name: t.Tablename,
+				columns:strings.Split(t.Columns, ","),
+				datapath: t.Datapath,
+				partitionField: t.PartitionField,
+			})
+	}
+	
 	g_dbinfos = make([]DBInfo, g_nodenum)
 	for i:=0; i<g_nodenum; i++ {
 		n := conf.Nodes[i]
@@ -156,14 +92,11 @@ func sysinit(conf *loadconfig.Config) {
 			dbname: conf.Dbname,
 		}
 	}
-
-	makeChunks()
 }
 
 
 func showConfigInfo() {
 	var info = "\n-----Distributed Database Data Loading Tool-----\n"
-	info += fmt.Sprintf("  table name:\t%s\n", g_tablename)
 	info += fmt.Sprintf("  node number:\t%d\n", g_nodenum)
 	for i:=0; i<g_nodenum; i++ {
 		d := g_dbinfos[i]
@@ -171,112 +104,106 @@ func showConfigInfo() {
 			d.host, d.port, d.user, d.dbname)
 	}
 
-	buflen, size := sizeConvert(int64(g_bufsize))
-	info += fmt.Sprintf("  buffer size:\t%d(%d%s)\n", g_bufsize, buflen, size)
-
-	filelen, size := sizeConvert(g_filesize)
-	info += fmt.Sprintf("  data file:\t%s [%d(%d%s)]\n",
-		g_datafile, g_filesize, filelen, size)
 	info += fmt.Sprintf("  reader numbber: %d\n", g_readernum)
 
-
-	for i, c := range g_chunks {
-		chunk_info := fmt.Sprintf("  chunk[%d] information\n", i)
-		clen, size := sizeConvert(c.chunksize)
-		csize := fmt.Sprintf("%d%s", clen, size)
-		blen, size := sizeConvert(int64(c.bufsize))
-		bsize := fmt.Sprintf("%d%s", blen, size)
-		chunk_info += fmt.Sprintf("    chunksize:%d(%s), bufsize:%d(%s), offset:%d\n",
-			c.chunksize, csize, c.bufsize, bsize, c.offset)
-		info += chunk_info
+	info += "Tables:\n"
+	for i, c := range g_tableinfos {
+		info += fmt.Sprintf("  [%d] table name: %s\n", i, c.name)
+		info += fmt.Sprintf("       columns: %s\n", strings.Join(c.columns, ","))
+		info += fmt.Sprintf("       datapath: %s\n", c.datapath)
 	}
+
+	info += "System Parameters:\n"
+	buflen, size := sizeConvert(int64(g_bufsize))
+	info += fmt.Sprintf("  IOreadSize:\t%d(%d%s)\n", g_bufsize, buflen, size)
+	buflen, size = sizeConvert(int64(g_BasketTupleSize))
+	info += fmt.Sprintf("  BasketTupleSize:\t%d(%d%s)\n", g_BasketTupleSize, buflen, size)
+	info += fmt.Sprintf("  DataQueueSize:\t%d\n", g_DataQueueSize)
 	
-	info += "------ end of configuration ------\n"
+	info += "\n------ end of configuration ------\n"
+	
 	fmt.Println(info)
 }
 
-func main() {
-	if len(os.Args) > 1 {
-		g_configfile = os.Args[1]
+
+func prepareJobs() {
+	logger.Debug("prepare jobs start...")
+	g_jobs = make([]*Job, 0)
+
+	for i:=0; i<g_tablenum; i++ {
+		job := NewJob(i, &g_tableinfos[i], &jwg)
+		g_jobs = append(g_jobs, job)
 	}
+	logger.Debug("there totally %d jobs to be processed", len(g_jobs))
+	logger.Debug("prepare jobs end..")
+}
+
+func validateJobs() {
+	logger.Debug("validate jobs start...")
+	for i, job := range g_jobs {
+		logger.Info("[%d] job start to validation...", i)
+		job.validate()
+		logger.Info("[%d] job validation successfully complete", i)
+	}
+	logger.Debug("validate jobs end...")
+}
+
+func processJobs() {
+	logger.Debug("process jobs start...")
+	for i, job := range g_jobs {
+		jwg.Add(1)
+		logger.Info("[%d] job start to process...", i)
+		go job.process()
+	}
+	jwg.Wait()
+	logger.Debug("process jobs end...")
+}
+
+func endJobs() {
+	logger.Debug("end jobs start...")
+	//var total_handlecount int64 = 0
+	//for i, r := range readerlist {
+	//	logger.Printf("reader[%d] handlecount: %d\n", i, r.handlecount)
+	//	total_handlecount += r.handlecount
+	//	logger.Printf("basket count %d\n", r.basketcount)
+	//}
+	//logger.Printf("total handle count is %d\n", total_handlecount)
+	//logger.Println("total execution interval is", time.Since(start))
+	logger.Debug("end jobs end...")
+}
+
+
+func main() {
+	if len(os.Args) == 2 {
+		g_configfile = os.Args[1]
+	} else if (len(os.Args) == 3) {
+		g_configfile = os.Args[1]
+		if os.Args[2] == "-q" {
+			g_quiet = true
+		}
+	} 
 
 	conf := loadConfig(g_configfile)
+	sysconf := loadSysConfig(g_sys_configfile)
 
-	sysinit(conf)
-	showConfigInfo()
-
-	processParallel(conf)
-
-	log.Println("all work done")
-}
-
-func makeChunks() {
-	log.Println("makeChunks enter ...")
-	chunksize := ((g_filesize-1) / int64(g_readernum)) + 1
-	left := g_filesize
-	for i := 0; i < g_readernum; i++ {
-		chunk := new(Chunk)
-		if left > chunksize {
-			chunk.chunksize = chunksize
-		} else {
-			chunk.chunksize = left
-		}
-		left -= chunksize
-		chunk.bufsize = g_bufsize
-		chunk.offset = chunksize * int64(i)
-		g_chunks = append(g_chunks, chunk)
-	}
-	log.Println("makeChunks exit ...")
-}
-
-
-func processParallel(conf *loadconfig.Config) {
-	recordFile := conf.Datapath
-	fd, err := os.Open(recordFile)
-	defer fd.Close()
-	if err != nil {
-		log.Fatal("processParallel function fail for", err)
+	sysinit(conf, sysconf)
+	if !g_quiet {
+		showConfigInfo()
 	}
 
-	time.Sleep(time.Duration(4)*time.Millisecond)
-
+	if !g_quiet {
+		fmt.Println("press enter to continue...")
+		fmt.Scanln()
+	}
+	logger.Info("work start ...")
 	
-	crholder = NewChunkRemainHolder(g_readernum)
-
-	fmt.Println("process enter to continue...")
-	fmt.Scanln()
-	fmt.Println("work start ...")
-
 	start := time.Now()
 
-	readerlist = make([]*Reader, 0)
-	
-	for i:=0; i<g_readernum; i++ {
-		rwg.Add(1)
-		r := NewReader(g_nodenum, 0)
-		r.startReader(g_chunks, i, fd, &rwg)
-		readerlist = append(readerlist, r)
-	}
+	prepareJobs()
+	validateJobs()
+	processJobs()
+	endJobs()
 
-
-	StartSenders(conf)
-	GoThroughDataQueue()
-
-	rwg.Wait()
-	AnalyzeChunkHeadAndTail(g_readernum)
-	FinishAllReadWork()
-	
-	WaitSendersStop()
-	swg.Wait()
-	gwg.Wait()
-
-	var total_handlecount int64 = 0
-	for i, r := range readerlist {
-		log.Printf("reader[%d] handlecount: %d\n", i, r.handlecount)
-		total_handlecount += r.handlecount
-		log.Printf("basket count %d\n", r.basketcount)
-	}
-	log.Printf("total handle count is %d\n", total_handlecount)
-	log.Println("total execution interval is", time.Since(start))
+	logger.Info("total execution interval is %s", time.Since(start))
+	logger.Info("all work done")
 }
-

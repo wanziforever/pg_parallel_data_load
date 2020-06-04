@@ -1,0 +1,53 @@
+dbname: postgres
+user: postgres
+password: 1
+buffersize: 8 #M io read buffer size
+readers: 1 # per table
+maxtuplechunk: 0
+loglevel: debug
+
+nodes:
+  - host: 127.0.0.1
+    port: 5432
+  - host: 127.0.0.1
+    port: 5433
+  - host: 127.0.0.1
+    port: 5434
+
+tables:
+  - tablename: cust_hist
+    columns: i_id, i_name, i_price, i_data, i_im_id
+    partitionField: 1 # start from 1
+    datapath: /home/postgres/data/csv/30000000.csv
+  - tablename: customer
+    columns: i_id, i_name, i_price, i_data, i_im_id
+    partitionField: 1 # start from 1
+    datapath: /home/postgres/data/csv/30000000.csv
+  - tablename: district
+    columns: i_id, i_name, i_price, i_data, i_im_id
+    partitionField: 1 # start from 1
+    datapath: /home/postgres/data/csv/30000000.csv
+  - tablename: bmsql_item
+    columns: i_id, i_name, i_price, i_data, i_im_id
+    partitionField: 1 # start from 1
+    datapath: /home/postgres/data/csv/30000000.csv
+  - tablename: new_order
+    columns: i_id, i_name, i_price, i_data, i_im_id
+    partitionField: 1 # start from 1
+    datapath: /home/postgres/data/csv/30000000.csv
+  - tablename: order_line
+    columns: i_id, i_name, i_price, i_data, i_im_id
+    partitionField: 1 # start from 1
+    datapath: /home/postgres/data/csv/30000000.csv
+#  - tablename: '"order"'
+#    columns: i_id, i_name, i_price, i_data, i_im_id
+#    partitionField: 1 # start from 1
+#    datapath: /home/postgres/data/csv/30000000.csv
+#  - tablename: stock
+#    columns: i_id, i_name, i_price, i_data, i_im_id
+#    partitionField: 1 # start from 1
+#    datapath: /home/postgres/data/csv/30000000.csv
+#  - tablename: warehouse
+#    columns: i_id, i_name, i_price, i_data, i_im_id
+#    partitionField: 1 # start from 1
+#    datapath: /home/postgres/data/csv/30000000.csv
