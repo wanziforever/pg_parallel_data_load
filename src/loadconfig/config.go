@@ -8,6 +8,7 @@ import (
 type NetworkNode struct {
 	Host string `yaml:"host"`
 	Port int `yaml:"port"`
+	Remainder int `yaml:"remainder"`
 }
 
 type Table struct {
@@ -19,6 +20,7 @@ type Table struct {
 
 type Config struct {
 	Dbname string `yaml:"dbname"`
+	Schema string `yaml:"schema"`
 	User string `yaml:"user"`
 	Password string `yaml:"password"`
 	Buffersize int `yaml:"buffersize"`

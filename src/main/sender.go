@@ -25,13 +25,14 @@ type DBInfo struct {
 	dbname string
 	user string
 	password string
+	remainder int
+	schema string
 }
 
 func (this DBInfo) MakeConnectionString() (string) {
-	connstr := fmt.Sprintf(
+	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		this.host, this.port, this.user, this.password, this.dbname)
-	return connstr
 }
 
 type Sender struct {

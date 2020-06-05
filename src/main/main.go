@@ -87,9 +87,11 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 		g_dbinfos[i] = DBInfo{
 			host: n.Host,
 			port: n.Port,
+			remainder: n.Remainder,
 			user: conf.User,
 			password: conf.Password,
 			dbname: conf.Dbname,
+			schema: conf.Schema,
 		}
 	}
 }
@@ -100,8 +102,8 @@ func showConfigInfo() {
 	info += fmt.Sprintf("  node number:\t%d\n", g_nodenum)
 	for i:=0; i<g_nodenum; i++ {
 		d := g_dbinfos[i]
-		info += fmt.Sprintf("    host: %s, port: %d, user: %s, db: %s\n",
-			d.host, d.port, d.user, d.dbname)
+		info += fmt.Sprintf("    host: %s, port: %d, user: %s, db: %s, schema: %s, remainder: %d\n",
+			d.host, d.port, d.user, d.dbname, d.schema, d.remainder)
 	}
 
 	info += fmt.Sprintf("  reader numbber: %d\n", g_readernum)
