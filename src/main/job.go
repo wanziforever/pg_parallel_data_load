@@ -1,5 +1,30 @@
 package main
 
+// Job is designed for a table distributing union, handle all distribution logic.
+// each job has own senderlist and readerlist.
+
+
+// there mainly serveral types of goroutings, like reader, sender, gothrough, job
+// reader: read the file to chunk structure, there maybe multiple reader for a
+//         large file (configurable) to speedup read, expecially for data read
+//         bottleneck
+// sender: call the pg copy function call, hold for copy finish
+// gothrough: read the data basket chain and send data to sender by shared buffer
+// job: the table related work holder
+//
+// the reader read the file data by chunk, examine and parse the tuple by newline,
+// find the distributed field of the tuple, and run hash function to compute the
+// hash index to determine the node index, setup a bulk of tuple to a basket, and
+// send the basket to data chain per node(the basket is mainly used to decrease
+// lock on the chain), gothrough goroutine check the data basket chain, and send
+// data to sender.
+//
+// each reader start from a offset from a file, it maybe the middle of the tuple
+// line, or end of the reader will left some data uncomplete tuple, just just
+// handle it by head and tail, and rejoin them at last.
+
+
+
 // #cgo CFLAGS: -g -Wall
 // #cgo LDFLAGS: -L./ -lhash
 // #include "hashfunc.h"
@@ -32,26 +57,27 @@ type Job struct {
 	remainHolder *ChunkRemainHolder
 	filesize int64
 	jobid int
+	displayName string
 }
 
 func (this *Job) process() {
-	logger.Debug("the %d(th) job start to process...", this.jobid)
+	logger.Info("%s start...", this.displayName)
 	recordFile := this.tableinfo.datapath
 	fd, err := os.Open(recordFile)
 	if err != nil {
-		logger.Fatal("processParallel function fail for", err)
+		logger.Fatal("job process fail for", err)
 	}
 	defer fd.Close()
 
 	// setup sender connections
 	for i, _ := range g_dbinfos {
 		sender := NewSender(&g_dbinfos[i], i)
-		sender.SetTable(this.tableinfo.name, this.tableinfo.columns...)
+		sender.SetTable(this.tableinfo.schema, this.tableinfo.name, this.tableinfo.columns...)
 		sender.PrepareCopyTransaction()
 		this.senderlist = append(this.senderlist, sender)
 	}
 	
-	// start readers
+	// start reader goroutines
 	for i:=0; i<g_readernum; i++ {
 		this.rwg.Add(1)
 		r := NewReader(i, &this.rwg, this.nodedq, this.remainHolder)
@@ -60,7 +86,7 @@ func (this *Job) process() {
 		this.readerlist = append(this.readerlist, r)
 	}
 	
-	// start sender
+	// start sender goroutines
 	for i:=0; i<len(this.senderlist); i++ {
 		sender := this.senderlist[i]
 		sender.StartBackend(&this.swg)
@@ -68,15 +94,26 @@ func (this *Job) process() {
 
 	this.GoThroughDataQueue()
 
+	// wait for all own reader goroutine fninish
 	this.rwg.Wait()
+
+	// when the reading work is done, check the chunk header and tail data,
+	// analyze them and try to join them all
 	this.AnalyzeChunkHeadAndTail()
 	this.FinishAllReadWork()
+	
 	this.WaitSendersStop()
+
+	// wait for all sender work done
 	this.swg.Wait()
+
+	// wait for go through gorotine work down
 	this.gwg.Wait()
+
+	// wait for job work down, currently not actually used
 	this.jwg.Done()
 	
-	logger.Debug("the %d(th) job end...", this.jobid)
+	logger.Info("%s end...", this.displayName)
 }
 
 func (this *Job) validate() {
@@ -113,6 +150,7 @@ func NewJob(index int, tinfo *TableInfo, jwg *sync.WaitGroup) *Job {
 		remainHolder: NewChunkRemainHolder(g_readernum),
 		jobid: index,
 		jwg: jwg,
+		displayName: fmt.Sprintf("job[%d]-%s", index, tinfo.name),
 	}
 
 	for i:=0; i<g_nodenum; i++ {
@@ -130,6 +168,12 @@ func NewJob(index int, tinfo *TableInfo, jwg *sync.WaitGroup) *Job {
 	return j
 }
 
+
+// since multiple reader case, a reader can start at any place of a file,
+// maybe in the middle of a line, so we just ignore the data before first
+// newline as "head", the same as the tail, after all the reader work is
+// done, collect head an tail for all readers, and join then as a valid
+// record again, and send it to copy reader(simulate a new basket)
 func (this *Job) AnalyzeChunkHeadAndTail() {
 	var count = g_readernum
 	var remainTuples = make([]string, 0)
@@ -140,11 +184,12 @@ func (this *Job) AnalyzeChunkHeadAndTail() {
 	}
 	
 	if this.remainHolder == nil {
-		logger.Info("chunk remainer holder is None")
+		logger.Warn("chunk remainer holder is None")
 		return 
 	}
 
 	for i := 0; i < count; i++ {
+		// if it is the first reader, the head is a valid tuple
 		if i == 0 {
 			tuple = this.remainHolder.holders[i].head
 			remainTuples = append(remainTuples, tuple)
@@ -185,6 +230,9 @@ func (this *Job) AnalyzeChunkHeadAndTail() {
 	}
 }
 
+
+// go through the data chain or queue, and create a gorouting go send basket
+// data to copy data sender gorouting for each node
 func (this *Job) GoThroughDataQueue() {
 	for i:=0; i<g_nodenum; i++ {
 		this.gwg.Add(1)
@@ -208,6 +256,7 @@ func (this *Job) GoThroughDataQueue() {
 					s.w.Write(buf[:n])
 				}
 				if b.last == true {
+					logger.Debug("%s meet the last basket", this.displayName)
 					break
 				}
 			}
@@ -217,12 +266,21 @@ func (this *Job) GoThroughDataQueue() {
 	}
 }
 
+// send data to the sender's shutdown chan, hope it can stop, and this
+// operation is considered not a in hurry action, since the sender will
+// finish the copy work before it shutdown, and operaiton more like
+// indicator to indicat the sender can exit after copy (it is a little
+// tricky control, sender also can quit whenever copy is down), but anyway
+// it is a old design but not much problem here.
 func (this *Job) WaitSendersStop() {
 	for i:=0; i<len(this.senderlist); i++ {
 		this.senderlist[i].shutdown <- 0
 	}
 }
 
+
+// put a final basket to the data chain, indicate there is no data anymore,
+// and the sender can send a EOF to copy data reader
 func (this *Job) FinishAllReadWork() {
 	for i:=0; i<g_nodenum; i++ {
 		b := NewTupleBasket()

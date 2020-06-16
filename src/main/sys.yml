@@ -1,0 +1,3 @@
+io_read_size: 8 # M io read buffer size
+max_data_queue_sync_size: 50
+basket_tuple_size: 4 # M

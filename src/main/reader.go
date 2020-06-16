@@ -1,5 +1,10 @@
 package main
 
+
+// support multiple reader for each data file, use the chunk size to divide
+// the reader start offset and end point, each reader can read the data in
+// parallel
+
 // #cgo CFLAGS: -g -Wall
 // #cgo LDFLAGS: -L./ -lhash
 // #include "hashfunc.h"
@@ -119,7 +124,7 @@ func (this *Reader) startReader(chunksizes []*Chunk, i int,	fd *os.File) {
 	go this.Run(chunksizes, i, fd)
 }
 
-
+// all the dirty
 func (this *Reader) Run(chunksizes []*Chunk, i int, fd *os.File) {
 	// also need to check the offset and file size
 	chunk := chunksizes[i]

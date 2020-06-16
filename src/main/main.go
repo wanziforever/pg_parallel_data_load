@@ -78,6 +78,7 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 				columns:strings.Split(t.Columns, ","),
 				datapath: t.Datapath,
 				partitionField: t.PartitionField,
+				schema: conf.Schema,
 			})
 	}
 	
@@ -102,8 +103,8 @@ func showConfigInfo() {
 	info += fmt.Sprintf("  node number:\t%d\n", g_nodenum)
 	for i:=0; i<g_nodenum; i++ {
 		d := g_dbinfos[i]
-		info += fmt.Sprintf("    host: %s, port: %d, user: %s, db: %s, schema: %s, remainder: %d\n",
-			d.host, d.port, d.user, d.dbname, d.schema, d.remainder)
+		info += fmt.Sprintf("    remainder: %d, host: %s, port: %d, user: %s, db: %s\n",
+			d.remainder, d.host, d.port, d.user, d.dbname)
 	}
 
 	info += fmt.Sprintf("  reader numbber: %d\n", g_readernum)
@@ -112,6 +113,7 @@ func showConfigInfo() {
 	for i, c := range g_tableinfos {
 		info += fmt.Sprintf("  [%d] table name: %s\n", i, c.name)
 		info += fmt.Sprintf("       columns: %s\n", strings.Join(c.columns, ","))
+		info += fmt.Sprintf("       schema: %s\n", c.schema)
 		info += fmt.Sprintf("       datapath: %s\n", c.datapath)
 	}
 
@@ -154,7 +156,7 @@ func processJobs() {
 	logger.Debug("process jobs start...")
 	for i, job := range g_jobs {
 		jwg.Add(1)
-		logger.Info("[%d] job start to process...", i)
+		logger.Debug("[%d] job start to process...", i)
 		go job.process()
 	}
 	jwg.Wait()
@@ -183,7 +185,7 @@ func main() {
 		if os.Args[2] == "-q" {
 			g_quiet = true
 		}
-	} 
+	}
 
 	conf := loadConfig(g_configfile)
 	sysconf := loadSysConfig(g_sys_configfile)

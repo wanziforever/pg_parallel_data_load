@@ -17,6 +17,7 @@ type TableInfo struct {
 	columns []string
 	datapath string
 	partitionField int
+	schema string
 }
 
 type DBInfo struct {
@@ -42,6 +43,7 @@ type Sender struct {
 	shutdown chan int
 	tablename string
 	fields []string
+	schema string
 
 	db *pgconn.PgConn
 	count int
@@ -51,24 +53,36 @@ type Sender struct {
 	w *io.PipeWriter
 	datachan *bytes.Buffer
 	name string
+
+	remainder int
 }
 
-func (this *Sender) SetTable(name string, columns ... string) {
+func (this *Sender) SetTable(schema string, name string, columns ... string) {
+	this.schema = schema
 	this.tablename = name
 	this.fields = append(this.fields, columns...)
 }
 
+
+// this function will hang until the copy function call finish, so it should
+// be run in a goroutine
 func (this *Sender) Run() {
 	logger.Debug("%s run enter", this.name)
 	
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Second)
 
-	_, err := this.db.CopyFrom(ctx, this.r, CopyIn(this.tablename, this.fields...))
+	_, err := this.db.CopyFrom(ctx, this.r,
+		CopyIn(this.remainder, this.schema, this.tablename, this.fields...))
 	if err != nil {
 		logger.Fatal(err.Error())
 	}
 
 	logger.Info("%s data has been copied", this.name)
+
+	// actually, the copy function call will return only when the copy work
+	// is done (receive a EOF sign), and then going to monitor the shutdown
+	// chan, so if when a goroutine send data to shutdown chan, it will not
+	// break, until the copy finish, and this is desiered purpose.
 loop:
 	for {
 		select {
@@ -82,6 +96,7 @@ loop:
 	logger.Info("sender work done for [%d]", this.index)
 }
 
+// close the connection to pg
 func (this *Sender) FinishWork() {
 	logger.Debug("meet shutdown")
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
@@ -91,7 +106,7 @@ func (this *Sender) FinishWork() {
 	}
 }
 
-
+// setup database connection
 func (this *Sender) PrepareCopyTransaction() {
 	connstr := this.dbi.MakeConnectionString()
 	logger.Info("going to connect %s", connstr)
@@ -128,23 +143,15 @@ func NewSender(dbi *DBInfo, index int) (*Sender) {
 	return &Sender{
 		dbi: dbi,
 		index: index,
+		remainder: dbi.remainder,
 		//buffer:  make([]byte, 0, ciBufferSize),
 		name: fmt.Sprintf("Sender-%d", index),
 	}
 }
 
-
-func QuoteIdentifier(name string) string {
-	end := strings.IndexRune(name, 0)
-	if end > -1 {
-		name = name[:end]
-	}
-	return `"` + strings.Replace(name, `"`, `""`, -1) + `"`
-}
-
-
-func CopyIn(table string, columns...string) string {
-	statement := "COPY " + table + " ("
+// setup the copyin comamnd
+func CopyIn(remainder int, schema string, table string, columns...string) string {
+	statement := fmt.Sprintf("copy %s_%d.%s (", schema, remainder, table)
 	for i, col := range columns {
 		if i != 0 {
 			statement += ", "
@@ -153,4 +160,12 @@ func CopyIn(table string, columns...string) string {
 	}
 	statement += ") FROM STDIN WITH (format csv)"
 	return statement
+}
+
+func QuoteIdentifier(name string) string {
+	end := strings.IndexRune(name, 0)
+	if end > -1 {
+		name = name[:end]
+	}
+	return `"` + strings.Replace(name, `"`, `""`, -1) + `"`
 }
