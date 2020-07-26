@@ -1,0 +1,12 @@
+user: hgdb
+db: hgdb
+schema: benchmarksql
+tables: bmsql_customer, bmsql_district, bmsql_history, bmsql_new_order, bmsql_oorder, bmsql_order_line, bmsql_stock, bmsql_warehouse
+hosts:
+  - ip: 192.168.31.141
+    port: 5101
+  - ip: 192.168.31.143
+    port: 5301
+  - ip: 192.168.31.144
+    port: 5401
+    

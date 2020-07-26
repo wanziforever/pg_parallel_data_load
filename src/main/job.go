@@ -153,7 +153,7 @@ func NewJob(index int, tinfo *TableInfo, jwg *sync.WaitGroup) *Job {
 		displayName: fmt.Sprintf("job[%d]-%s", index, tinfo.name),
 	}
 
-	for i:=0; i<g_nodenum; i++ {
+	for i:=0; i<g_slice_num; i++ {
 		j.nodedq = append(j.nodedq, NewDataQueue())
 	}
 	datafile := j.tableinfo.datapath
@@ -212,7 +212,7 @@ func (this *Job) AnalyzeChunkHeadAndTail() {
 
 	for _, tuple = range remainTuples {
 		bytetuple := []byte(tuple)
-		s := GetFieldByIndex(bytetuple, 1, 1)
+		s := GetFieldByIndex(bytetuple, this.tableinfo.partitionField, 1)
 		if len(s) == 0 {
 			logger.Fatal("fail to parse the field by index")
 		}
@@ -234,7 +234,7 @@ func (this *Job) AnalyzeChunkHeadAndTail() {
 // go through the data chain or queue, and create a gorouting go send basket
 // data to copy data sender gorouting for each node
 func (this *Job) GoThroughDataQueue() {
-	for i:=0; i<g_nodenum; i++ {
+	for i:=0; i<g_slice_num; i++ {
 		this.gwg.Add(1)
 		go func(i int) {
 			q := this.nodedq[i]
@@ -282,7 +282,7 @@ func (this *Job) WaitSendersStop() {
 // put a final basket to the data chain, indicate there is no data anymore,
 // and the sender can send a EOF to copy data reader
 func (this *Job) FinishAllReadWork() {
-	for i:=0; i<g_nodenum; i++ {
+	for i:=0; i<g_slice_num; i++ {
 		b := NewTupleBasket()
 		b.last = true
 		this.nodedq[i].putQ(b)

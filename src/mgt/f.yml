@@ -1,0 +1,13 @@
+user: hgdb
+db: hgdb
+schema: benchmarksql
+mode: all
+slice: 3
+hosts:
+  - ip: 192.168.31.141
+    port: 4101
+  - ip: 192.168.31.143
+    port: 4301
+  - ip: 192.168.31.144
+    port: 4401
+    

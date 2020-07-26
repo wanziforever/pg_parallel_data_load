@@ -8,7 +8,6 @@ import (
 type NetworkNode struct {
 	Host string `yaml:"host"`
 	Port int `yaml:"port"`
-	Remainder int `yaml:"remainder"`
 }
 
 type Table struct {
@@ -25,8 +24,11 @@ type Config struct {
 	Password string `yaml:"password"`
 	Buffersize int `yaml:"buffersize"`
 	Readers int `yaml:readers""`
+	Slicenum int `yaml:"slicenum"`
 	Maxtuplechunk int64 `yaml:maxtuplechunk`
 	Loglevel string `yaml:"loglevel"`
+	Encoding string `yaml:"encoding"`
+	Csvheader bool `yaml:"csvheader"`
 	Nodes []NetworkNode `yaml:"nodes"`
 	Tables []Table `yaml:tables`
 }

@@ -61,8 +61,8 @@ func NewReader(
 	r.count = 0
 	r.index = i
 	r.rwg = rwg
-	r.baskets = make([]*TupleBasket, g_nodenum)
-	for i:=0; i<g_nodenum; i++ {
+	r.baskets = make([]*TupleBasket, g_slice_num)
+	for i:=0; i<g_slice_num; i++ {
 		r.baskets[i] = NewTupleBasket()
 	}
 	r.nodedq = nodedq
@@ -113,7 +113,7 @@ func (this *Reader) upLoadAllBasket() {
 	// in case the basket is not full, and send it to data queue
 	// usually called at the end of the read
 	logger.Info("upload all the basket for readers")
-	for i:=0; i<g_nodenum; i++ {
+	for i:=0; i<g_slice_num; i++ {
 		b := this.baskets[i]
 		this.nodedq[i].putQ(b)
 	}
@@ -199,9 +199,10 @@ mainloop:
 			if err != nil {
 				logger.Fatal(err.Error())
 			}
-			mod := C.int(g_nodenum)
+			mod := C.int(g_slice_num)
 			
 			size := C.get_matching_hash_bounds_int(C.int(key), mod)
+
 			this.putTupleToBasket(int(size), buffer[start:start+l+1])
 			this.count++
 			if this.processMaxLineLimited != 0 && this.count >= this.processMaxLineLimited {
@@ -252,10 +253,11 @@ func ReadSlice(buffer []byte, delim byte) (pos int) {
 
 func GetFieldByIndex(c []byte, index int, max int) ([]byte) {
 	// currently max is not used
+
 	var r = make([]byte, 0)
 	for i:=0; i<index; i++ {
 		r = GetNextField(c, byte(Delim)) // actually here need to define a delim
-		c = c[len(r):]
+		c = c[len(r)+1:]
 	}
 	return r
 }

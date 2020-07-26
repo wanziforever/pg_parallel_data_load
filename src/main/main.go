@@ -24,6 +24,9 @@ var (
 	g_quiet = false
 	g_filesize int64 = 0
 	g_jobs []*Job
+	g_slice_num = 0
+	g_encoding string
+	g_has_csv_header bool = false
 	jwg sync.WaitGroup
 )
 
@@ -62,6 +65,9 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 	g_nodenum = len(conf.Nodes)
 	g_tablenum = len(conf.Tables)
 	g_maxtuplechunk = conf.Maxtuplechunk
+	g_slice_num = conf.Slicenum
+	g_encoding = conf.Encoding
+	g_has_csv_header = conf.Csvheader
 
 	if sysconf != nil {
 		g_BasketTupleSize = sysconf.Basket_tuple_size * 1024 * 1024
@@ -82,13 +88,17 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 			})
 	}
 	
-	g_dbinfos = make([]DBInfo, g_nodenum)
-	for i:=0; i<g_nodenum; i++ {
-		n := conf.Nodes[i]
+	g_dbinfos = make([]DBInfo, g_slice_num)
+
+	for i:=0; i < g_slice_num; i++ {
+		remainder := i;
+
+		target_node_index := remainder % g_nodenum
+		n := conf.Nodes[target_node_index]
 		g_dbinfos[i] = DBInfo{
 			host: n.Host,
 			port: n.Port,
-			remainder: n.Remainder,
+			remainder: remainder,
 			user: conf.User,
 			password: conf.Password,
 			dbname: conf.Dbname,
@@ -101,7 +111,10 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 func showConfigInfo() {
 	var info = "\n-----Distributed Database Data Loading Tool-----\n"
 	info += fmt.Sprintf("  node number:\t%d\n", g_nodenum)
-	for i:=0; i<g_nodenum; i++ {
+	info += fmt.Sprintf("  slice number:\t%d\n", g_slice_num)
+	info += fmt.Sprintf("  encoding:\t%s\n", g_encoding)
+	info += fmt.Sprintf("   csv header:\t%t\n", g_has_csv_header)
+	for i:=0; i<g_slice_num; i++ {
 		d := g_dbinfos[i]
 		info += fmt.Sprintf("    remainder: %d, host: %s, port: %d, user: %s, db: %s\n",
 			d.remainder, d.host, d.port, d.user, d.dbname)

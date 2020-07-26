@@ -1,3 +1,4 @@
 source set
-go build -gcflags '-N' -o ../../bin/load
+go build -gcflags '-N' -o load
+cp load ../../bin/
 cp test.yml ../../bin/

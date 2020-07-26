@@ -158,7 +158,15 @@ func CopyIn(remainder int, schema string, table string, columns...string) string
 		}
 		statement += col
 	}
-	statement += ") FROM STDIN WITH (format csv)"
+	statement += ") FROM STDIN WITH CSV"
+	if g_has_csv_header {
+		statement += " header"
+	}
+	if len(g_encoding) > 0 {
+		statement += " encoding '" + g_encoding + "'"
+	}
+	statement += " NULL AS 'NULL'"
+	logger.Info(statement)
 	return statement
 }
 
