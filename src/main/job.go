@@ -81,7 +81,7 @@ func (this *Job) process() {
 	for i:=0; i<g_readernum; i++ {
 		this.rwg.Add(1)
 		r := NewReader(i, &this.rwg, this.nodedq, this.remainHolder)
-		r.setPartitionField(this.tableinfo.partitionField)
+		r.setPartitionField(this.tableinfo.partitionField, this.tableinfo.partitionFieldType)
 		r.startReader(this.chunks, i, fd)
 		this.readerlist = append(this.readerlist, r)
 	}

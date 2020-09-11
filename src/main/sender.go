@@ -16,6 +16,7 @@ type TableInfo struct {
 	name string
 	columns []string
 	datapath string
+	partitionFieldType string
 	partitionField int
 	schema string
 }
@@ -69,8 +70,8 @@ func (this *Sender) SetTable(schema string, name string, columns ... string) {
 func (this *Sender) Run() {
 	logger.Debug("%s run enter", this.name)
 	
-	//ctx, _ := context.WithTimeout(context.Background(), 1000*time.Second)
-	ctx := context.Background()
+	// ctx, _ := context.WithTimeout(context.Background(), 1000*time.Second)
+        ctx := context.Background();
 
 	_, err := this.db.CopyFrom(ctx, this.r,
 		CopyIn(this.remainder, this.schema, this.tablename, this.fields...))

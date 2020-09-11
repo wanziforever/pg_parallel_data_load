@@ -17,6 +17,12 @@ import (
 	"bytes"
 	"time"
 	"strconv"
+	"strings"
+)
+
+const (
+	PARTITION_FIELD_TYPE_INTEGER int = 0
+	PARTITION_FIELD_TYPE_NUMERIC int = 1
 )
 
 var (
@@ -82,10 +88,19 @@ type Reader struct {
 	remainHolder *ChunkRemainHolder
 	index int
 	partitionField int
+	partitionFieldType int
 }
 
-func (this *Reader) setPartitionField(index int) {
+func (this *Reader) setPartitionField(index int, partitionFieldType string) {
 	this.partitionField = index
+	if strings.ToLower(partitionFieldType) == "integer" {
+		this.partitionFieldType = PARTITION_FIELD_TYPE_INTEGER;
+	} else if (strings.ToLower(partitionFieldType) == "numeric") {
+		this.partitionFieldType = PARTITION_FIELD_TYPE_NUMERIC
+	} else {
+		logger.Error("reader: unsupport partition field type %s", partitionFieldType)
+		os.Exit(2);
+	}
 }
 
 func (this *Reader) putTupleToBasket(nodeid int, data []byte) {
@@ -194,16 +209,24 @@ mainloop:
 				logger.Error(string(buffer[start:start+l+1]))
 				logger.Fatal("fail to parse the field by index")
 			}
-			
-			key, err := strconv.Atoi(string(s))
-			if err != nil {
-				logger.Fatal(err.Error())
-			}
-			mod := C.int(g_slice_num)
-			
-			size := C.get_matching_hash_bounds_int(C.int(key), mod)
 
-			this.putTupleToBasket(int(size), buffer[start:start+l+1])
+			size := -1
+
+			if this.partitionFieldType == PARTITION_FIELD_TYPE_INTEGER {
+				
+				key, err := strconv.Atoi(string(s))
+				if err != nil {
+					logger.Fatal(err.Error())
+				}
+				mod := C.int(g_slice_num)
+				
+				size = int(C.get_matching_hash_bounds_int(C.int(key), mod))
+			} else if (this.partitionFieldType == PARTITION_FIELD_TYPE_NUMERIC) {
+				mod := C.int(g_slice_num)
+				size = int(C.get_matching_hash_bounds_numeric(C.CString(string(s)), mod))
+			}
+
+			this.putTupleToBasket(size, buffer[start:start+l+1])
 			this.count++
 			if this.processMaxLineLimited != 0 && this.count >= this.processMaxLineLimited {
 				logger.Info("reader[%d] reach the max tuple limit %d", i, this.processMaxLineLimited)

@@ -7,6 +7,7 @@ import (
 	"time"
 	"loadconfig"
 	"strings"
+	"runtime/trace"
 )
 
 var logger = NewLogger()
@@ -84,6 +85,7 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 				columns:strings.Split(t.Columns, ","),
 				datapath: t.Datapath,
 				partitionField: t.PartitionField,
+				partitionFieldType: t.PartitionFieldType,
 				schema: conf.Schema,
 			})
 	}
@@ -128,6 +130,7 @@ func showConfigInfo() {
 		info += fmt.Sprintf("       columns: %s\n", strings.Join(c.columns, ","))
 		info += fmt.Sprintf("       schema: %s\n", c.schema)
 		info += fmt.Sprintf("       datapath: %s\n", c.datapath)
+		info += fmt.Sprintf("       partitionFIeld: %d %s\n", c.partitionField, c.partitionFieldType)
 	}
 
 	info += "System Parameters:\n"
@@ -191,6 +194,16 @@ func endJobs() {
 
 
 func main() {
+        ft, err := os.Create("trace.out")
+        defer ft.Close()
+
+        err = trace.Start(ft)
+        defer trace.Stop()
+        if err != nil {
+            logger.Info("----fail to trace\n")
+           panic(err) 
+        }
+
 	if len(os.Args) == 2 {
 		g_configfile = os.Args[1]
 	} else if (len(os.Args) == 3) {
