@@ -1,14 +1,14 @@
 dbname: hgdb
-schema: benchmarksql
+schema: public
 user: hgdb 
-password: 1
+password: hgdb
 buffersize: 8 #M io read buffer size
-readers: 1 # per table
-slicenum: 6
+readers: 5 # per table
+slicenum: 5
 maxtuplechunk: 0
 loglevel: debug
 encoding: UTF-8
-csvheader: yes # yes or no
+csvheader: no # yes or no
 
 #nodes:
 #  - host: 192.168.30.141
@@ -31,46 +31,59 @@ csvheader: yes # yes or no
 #    remainder: 5
 
 nodes:
-  - host: 192.168.30.141
+  - host: 192.168.0.104
     port: 4101
-  - host: 192.168.30.143
+  - host: 192.168.1.45
+    port: 4201
+  - host: 192.168.1.150
     port: 4301
-  - host: 192.168.30.144
+  - host: 192.168.1.182
     port: 4401
+  - host: 192.168.1.96
+    port: 4501
       
-
 tables:
   - tablename: bmsql_history
     columns: hist_id, h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, h_date, h_amount, h_data
-    partitionFieldType: numeric
-    partitionField: 6 # start from 1
-    datapath: /ssd_data/benchmarksql-csv1000/cust-hist.csv
-#  - tablename: bmsql_customer
-#    columns: c_w_id, c_d_id, c_id, c_discount, c_credit, c_last, c_first, c_credit_lim, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_middle, c_data
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/customer.csv
-#  - tablename: bmsql_district
-#    columns: d_w_id, d_id, d_ytd, d_tax, d_next_o_id, d_name, d_street_1, d_street_2, d_city, d_state, d_zip
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/district.csv
-#  - tablename: bmsql_new_order
-#    columns: no_w_id, no_d_id, no_o_id
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/new-order.csv
-#  - tablename: bmsql_order_line
-#    columns: ol_w_id, ol_d_id, ol_o_id, ol_number, ol_i_id, ol_delivery_d, ol_amount, ol_supply_w_id, ol_quantity, ol_dist_info
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/order-line.csv
-#  - tablename: bmsql_oorder
-#    columns: o_w_id, o_d_id, o_id, o_c_id, o_carrier_id, o_ol_cnt, o_all_local, o_entry_d
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/order.csv
-#  - tablename: bmsql_stock
-#    columns: s_w_id, s_i_id, s_quantity, s_ytd, s_order_cnt, s_remote_cnt, s_data, s_dist_01, s_dist_02, s_dist_03, s_dist_04, s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, s_dist_10
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/stock.csv
-#  - tablename: bmsql_warehouse
-#    columns: w_id, w_ytd, w_tax, w_name, w_street_1, w_street_2, w_city, w_state, w_zip
-#    partitionField: 1 # start from 1
-#    datapath: /ssd_data/benchmarksql-csv1000/warehouse.csv
+    partitionFieldType: integer
+    partitionField: 6 # start from 6
+    datapath: /home/highgo/benchmarksql-csv1000/cust-hist.csv
+  - tablename: bmsql_customer
+    columns: c_id, c_d_id, c_w_id, c_discount, c_credit, c_last, c_first, c_credit_lim,c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_street_1,c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_middle, c_data
+    partitionFieldType: integer
+    partitionField: 3 # start from 3
+    datapath: /home/highgo/benchmarksql-csv1000/customer.csv
+  - tablename: bmsql_district
+    columns: d_id, d_w_id, d_ytd, d_tax, d_next_o_id, d_name, d_street_1,d_street_2, d_city, d_state, d_zip
+    partitionFieldType: integer
+    partitionField: 2 # start from 2
+    datapath: /home/highgo/benchmarksql-csv1000/district.csv
+  - tablename: bmsql_new_order
+    columns: no_w_id, no_d_id, no_o_id
+    partitionFieldType: integer
+    partitionField: 1 # start from 1
+    datapath: /home/highgo/benchmarksql-csv1000/new-order.csv
+  - tablename: bmsql_order_line
+    columns: ol_w_id, ol_d_id, ol_o_id, ol_number, ol_i_id, ol_delivery_d,ol_amount, ol_supply_w_id, ol_quantity, ol_dist_info
+    partitionFieldType: integer
+    partitionField: 1 # start from 1
+    datapath: /home/highgo/benchmarksql-csv1000/order-line.csv
+  - tablename: bmsql_oorder
+    columns: o_id, o_w_id, o_d_id, o_c_id, o_carrier_id, o_ol_cnt, o_all_local, o_entry_d
+    partitionFieldType: integer
+    partitionField: 2 # start from 1
+    datapath: /home/highgo/benchmarksql-csv1000/order.csv
+  - tablename: bmsql_stock
+    columns: s_i_id, s_w_id, s_quantity, s_ytd, s_order_cnt, s_remote_cnt, s_data,s_dist_01, s_dist_02, s_dist_03, s_dist_04, s_dist_05,s_dist_06, s_dist_07, s_dist_08, s_dist_09, s_dist_10
+    partitionFieldType: integer
+    partitionField: 2 # start from 1
+    datapath: /home/highgo/benchmarksql-csv1000/stock.csv
+  - tablename: bmsql_warehouse
+    columns: w_id, w_ytd, w_tax, w_name, w_street_1, w_street_2, w_city, w_state, w_zip
+    partitionFieldType: integer
+    partitionField: 1 # start from 1
+    datapath: /home/highgo/benchmarksql-csv1000/warehouse.csv
+
+
+
 

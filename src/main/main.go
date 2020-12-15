@@ -89,14 +89,20 @@ func sysinit(conf *loadconfig.Config, sysconf *loadconfig.SysConfig) {
 				schema: conf.Schema,
 			})
 	}
+
+	if g_slice_num != g_nodenum {
+		logger.Error("configuration not consistant: slice nubmer should be equal to g_nodenum")
+		os.Exit(1)
+	}
 	
 	g_dbinfos = make([]DBInfo, g_slice_num)
 
 	for i:=0; i < g_slice_num; i++ {
 		remainder := i;
 
-		target_node_index := remainder % g_nodenum
-		n := conf.Nodes[target_node_index]
+		// target_node_index := remainder % g_nodenum
+		// n := conf.Nodes[target_node_index]
+		n := conf.Nodes[remainder]
 		g_dbinfos[i] = DBInfo{
 			host: n.Host,
 			port: n.Port,

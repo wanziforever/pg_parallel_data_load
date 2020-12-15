@@ -153,7 +153,7 @@ func NewSender(dbi *DBInfo, index int) (*Sender) {
 
 // setup the copyin comamnd
 func CopyIn(remainder int, schema string, table string, columns...string) string {
-	statement := fmt.Sprintf("copy %s_%d.%s (", schema, remainder, table)
+	statement := fmt.Sprintf("copy %s.%s (", schema, table)
 	for i, col := range columns {
 		if i != 0 {
 			statement += ", "

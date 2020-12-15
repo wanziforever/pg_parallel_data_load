@@ -225,6 +225,7 @@ mainloop:
 				mod := C.int(g_slice_num)
 				size = int(C.get_matching_hash_bounds_numeric(C.CString(string(s)), mod))
 			}
+			//logger.Info("reader: the key is %s,and target index is %d, mod is %d\n", string(s), size, g_slice_num)
 
 			this.putTupleToBasket(size, buffer[start:start+l+1])
 			this.count++

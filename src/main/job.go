@@ -36,6 +36,7 @@ import (
 	"strconv"
 	"time"
 	"io"
+	"strings"
 )
 
 type Chunk struct {
@@ -217,13 +218,20 @@ func (this *Job) AnalyzeChunkHeadAndTail() {
 			logger.Fatal("fail to parse the field by index")
 		}
 
-		key, err := strconv.Atoi(string(s))
-		if err != nil {
-			logger.Fatal(err.Error())
-		}
-		mod := C.int(len(this.senderlist))
+		size := -1
+		if strings.ToLower(this.tableinfo.partitionFieldType) == "integer" {
 
-		size := C.get_matching_hash_bounds_int(C.int(key), mod)
+			key, err := strconv.Atoi(string(s))
+			if err != nil {
+				logger.Fatal(err.Error())
+			}
+			mod := C.int(len(this.senderlist))
+
+			size = int(C.get_matching_hash_bounds_int(C.int(key), mod))
+		} else if strings.ToLower(this.tableinfo.partitionFieldType) == "numeric" {
+			mod := C.int(len(this.senderlist))
+			size = int(C.get_matching_hash_bounds_numeric(C.CString(string(s)), mod))
+		}
 		b := NewTupleBasket()
 		b.Write(bytetuple)
 		this.nodedq[int(size)].putQ(b)
