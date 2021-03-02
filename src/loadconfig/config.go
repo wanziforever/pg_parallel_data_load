@@ -14,6 +14,7 @@ type Table struct {
 	Tablename string `yaml:"tablename"`
 	Columns string `yaml:"columns"`
 	PartitionField int `yaml:"partitionField"`
+	PartitionFieldType string `yaml:"partitionFieldType"`
 	Datapath string `yaml:datapath`
 }
 

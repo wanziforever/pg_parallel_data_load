@@ -7,3 +7,6 @@ data to segment servers
 parallel data loading tool will read your data and send the slice to the segments directly, will be many times of performance increase
 
 delveloper: denny wang (wanziforever@163.com)
+
+
+go get github.com/jackc/pgconn

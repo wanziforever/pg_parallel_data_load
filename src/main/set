@@ -1,6 +1,7 @@
 export GOPATH=$HOME/newhgload
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export GOPATH=$DIR/../..
+export GO111MODULE="off"
 echo "SET GOPATH to $GOPATH"
 alias b="./b"
 alias r="./r"

@@ -1,6 +1,3 @@
 src/main/load
-src/github.com/*
-src/golang.org/*
-src/gopkg.in/*
 src/mgt/finddata
 src/mgt/cleardata
